@@ -18,4 +18,4 @@ Cargo.lock
 
 /target
 
-/test_pdf/*
+/test_pdf/*.pdf
