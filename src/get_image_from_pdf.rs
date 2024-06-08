@@ -73,7 +73,8 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
         }
     });
 
-    let pool = ThreadPool::new(get_sub_workers_limit(50.0));
+    let pool = ThreadPool::new(1);
+    //let pool = ThreadPool::new(get_sub_workers_limit(50.0));
     let image_hash_list: Arc<RwLock<HashSet<Arc<[u8]>>>> = Arc::new(RwLock::new(HashSet::new()));
     let mut page_counter: u64 = 0;
 
@@ -217,6 +218,17 @@ where
         }
         {
             let mut write_set = images_kvs.write().unwrap();
+            if write_set.contains(&data) {
+                if log_enabled!(Level::Debug) {
+                    info!(
+                        "IMAGE FILE ALREADY EXISTS. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                        dest_dir_path.display(),
+                        page_count,
+                        image_count
+                    );
+                }
+                continue;
+            }
             write_set.insert(data.clone());
             if log_enabled!(Level::Info) {
                 info!(
@@ -239,7 +251,7 @@ where
             my_thread_id,
             ext
         );
-        
+
         let mut output = match File::create(&save_path_str) {
             Ok(file) => file,
             Err(e) => {
@@ -254,7 +266,7 @@ where
             Ok(_) => {
                 info!(
                     "IMAGE FILE WRITTEN. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
-                    dest_dir_path.display(),
+                    save_path_str,
                     page_count,
                     image_count
                 );
@@ -262,7 +274,7 @@ where
             Err(e) => {
                 warn!(
                     "COULD NOT WRITE IMAGE FILE. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
-                    dest_dir_path.display(),
+                    save_path_str,
                     page_count,
                     image_count,
                     e
