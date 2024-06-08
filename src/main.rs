@@ -11,6 +11,8 @@ mod get_image_from_pdf;
 
 mod set_workers_limit;
 
+mod get_thread_id;
+
 use clap::Parser;
 use std::path::Path;
 

@@ -1,4 +1,5 @@
 use crate::check_path::is_valid_file;
+use crate::get_thread_id::get_thread_id_number;
 use crate::set_workers_limit::get_sub_workers_limit;
 
 use chrono::{DateTime, Utc};
@@ -9,7 +10,10 @@ use pdf::enc::StreamFilter;
 use pdf::file::Cache;
 use pdf::file::File as PdfFile;
 use pdf::file::Log;
+use pdf::primitive::Name;
 use pdf::{error::PdfError, file::FileOptions, object::*};
+use regex::{Captures, Regex};
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
@@ -73,8 +77,8 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
         }
     });
 
-    let pool = ThreadPool::new(1);
-    //let pool = ThreadPool::new(get_sub_workers_limit(50.0));
+    //let pool = ThreadPool::new(1);
+    let pool = ThreadPool::new(get_sub_workers_limit(50.0));
     let image_hash_list: Arc<RwLock<HashSet<Arc<[u8]>>>> = Arc::new(RwLock::new(HashSet::new()));
     let mut page_counter: u64 = 0;
 
@@ -136,9 +140,10 @@ where
     Y: Cache<std::result::Result<Arc<[u8]>, Arc<PdfError>>>,
     L: Log,
 {
+    let re = Regex::new(r"\d+").unwrap();
     let my_thread_id: std::thread::ThreadId = thread::current().id();
 
-    let mut images = vec![];
+    let mut images: HashMap<Name, RcRef<XObject>> = HashMap::new();
     let resources: &MaybeRef<Resources> = {
         match page.resources() {
             Ok(resources) => resources,
@@ -155,13 +160,20 @@ where
     };
     let resolver = file.resolver();
 
-    images.extend(
-        resources
-            .xobjects
-            .iter()
-            .map(|(_name, &r)| resolver.get(r).unwrap())
-            .filter(|o| matches!(**o, pdf::object::XObject::Image(_))),
-    );
+    for (name, &r) in resources.xobjects.iter() {
+        let object = resolver.get(r).unwrap();
+        if matches!(*object, pdf::object::XObject::Image(_)) {
+            if (log_enabled!(Level::Debug)) {
+                log::info!(
+                    "XObject_Name: {} DEST_PATH : {} PAGE: {}",
+                    name,
+                    dest_dir_path.display(),
+                    page_count
+                );
+            }
+            images.insert(name.clone(), object.clone());
+        }
+    }
 
     log::info!(
         "THIS PAGE IMAGES COUNT. PAGE : {} IMAGES: {}",
@@ -174,7 +186,7 @@ where
     for o in images.iter() {
         image_count += 1;
 
-        let img = match **o {
+        let img = match **o.1 {
             XObject::Image(ref im) => im,
             _ => continue,
         };
@@ -183,15 +195,14 @@ where
             Some(StreamFilter::DCTDecode(_)) => "jpg",
             Some(StreamFilter::JBIG2Decode(_)) => "jbig2",
             Some(StreamFilter::JPXDecode) => "jp2k",
-            Some(StreamFilter::CCITTFaxDecode(_)) => "tiff",
-            Some(StreamFilter::FlateDecode(_)) => "png",
             _ => {
                 if log_enabled!(Level::Warn) {
                     let hex_dump: Vec<String> =
                         data.iter().take(8).map(|b| format!("{:02x}", b)).collect();
                     warn!(
-                    "UNSUPPORTED IMAGE FORMAT. TOP_8 : {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                    "UNSUPPORTED IMAGE FORMAT. TOP_8 : {} OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
                     hex_dump.join("_"),
+                    o.0,
                     dest_dir_path.display(),
                     page_count,
                     image_count
@@ -207,7 +218,8 @@ where
             if read_set.contains(&data) {
                 if log_enabled!(Level::Debug) {
                     info!(
-                        "IMAGE FILE ALREADY EXISTS. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                        "IMAGE FILE ALREADY EXISTS. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                        o.0,
                         dest_dir_path.display(),
                         page_count,
                         image_count
@@ -217,11 +229,13 @@ where
             }
         }
         {
+            //書き込みロック取得後の再確認。
             let mut write_set = images_kvs.write().unwrap();
             if write_set.contains(&data) {
                 if log_enabled!(Level::Debug) {
                     info!(
-                        "IMAGE FILE ALREADY EXISTS. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                        "IMAGE FILE ALREADY EXISTS. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                        o.0,
                         dest_dir_path.display(),
                         page_count,
                         image_count
@@ -230,25 +244,34 @@ where
                 continue;
             }
             write_set.insert(data.clone());
-            if log_enabled!(Level::Info) {
+            if log_enabled!(Level::Debug) {
                 info!(
-                    "NEW HASH INSERTED. HASHSET_LENGTH: {} DEST_PATH: {} PAGE: {} IMAGE_COUNT : {}",
-                    write_set.len(),
+                    "NEW HASH INSERTED. OBJECT_NAME: {} DEST_PATH: {} PAGE: {} IMAGE_COUNT : {} HASHSET_LENGTH: {}",
+                    o.0,
                     dest_dir_path.display(),
                     page_count,
-                    image_count
+                    image_count,
+                    write_set.len()
                 );
             }
         }
-        
+
+        //埋め込みオブジェクト名の数字を6桁に変換する。
+        let converted_embbeded_object_name: std::borrow::Cow<str> =
+            re.replace_all(o.0, |caps: &Captures| {
+                let num: u32 = (&caps[0]).parse().unwrap();
+                format!("{:06}", num)
+            });
+
         let save_path_str = format!(
-            "{}/image_{}_{:06}_{:06}_{:?}_{:?}.{}",
+            "{}/image_{}_{}_{:06}_{:06}_{:06}_{:06}.{}",
             dest_dir_path.display(),
             unixtime_val,
+            converted_embbeded_object_name,
             image_count,
             page_count,
-            parent_thread_id,
-            my_thread_id,
+            get_thread_id_number(parent_thread_id),
+            get_thread_id_number(&my_thread_id),
             ext
         );
 
@@ -256,8 +279,8 @@ where
             Ok(file) => file,
             Err(e) => {
                 warn!(
-                    "COULD NOT CREATE IMAGE FILE. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
-                    save_path_str, page_count, image_count, e
+                    "COULD NOT CREATE IMAGE FILE. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
+                    o.0,save_path_str, page_count, image_count, e
                 );
                 continue;
             }
@@ -265,19 +288,14 @@ where
         match output.write(&data) {
             Ok(_) => {
                 info!(
-                    "IMAGE FILE WRITTEN. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
-                    save_path_str,
-                    page_count,
-                    image_count
+                    "IMAGE FILE WRITTEN. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                    o.0,save_path_str, page_count, image_count
                 );
             }
             Err(e) => {
                 warn!(
-                    "COULD NOT WRITE IMAGE FILE. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
-                    save_path_str,
-                    page_count,
-                    image_count,
-                    e
+                    "COULD NOT WRITE IMAGE FILE. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
+                    o.0,save_path_str, page_count, image_count, e
                 );
                 continue;
             }
