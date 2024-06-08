@@ -2,18 +2,17 @@ use crate::check_path::is_valid_file;
 use crate::set_workers_limit::get_sub_workers_limit;
 
 use chrono::{DateTime, Utc};
-use image::guess_format;
-use log::info;
-use log::{debug, error, warn};
+use log::{error, info, log_enabled, warn, Level};
 use pdf::any::AnySync;
 use pdf::backend::Backend;
+use pdf::enc::StreamFilter;
 use pdf::file::Cache;
 use pdf::file::File as PdfFile;
 use pdf::file::Log;
 use pdf::{error::PdfError, file::FileOptions, object::*};
-use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -74,10 +73,8 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
         }
     });
 
-    let pool = ThreadPool::new(get_sub_workers_limit());
-
-    let image_hash_list: Arc<RwLock<HashSet<String>>> = Arc::new(RwLock::new(HashSet::new()));
-
+    let pool = ThreadPool::new(get_sub_workers_limit(50.0));
+    let image_hash_list: Arc<RwLock<HashSet<Arc<[u8]>>>> = Arc::new(RwLock::new(HashSet::new()));
     let mut page_counter: u64 = 0;
 
     for page in file.pages() {
@@ -126,7 +123,7 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
 fn get_images_from_page<T, K, Y, L>(
     page: &PageRc,
     file: Arc<PdfFile<T, K, Y, L>>,
-    images_kvs: Arc<RwLock<HashSet<String>>>,
+    images_kvs: Arc<RwLock<HashSet<Arc<[u8]>>>>,
     dest_dir_path: Arc<PathBuf>,
     parent_thread_id: &std::thread::ThreadId,
     unixtime_val: i64,
@@ -180,82 +177,99 @@ where
             XObject::Image(ref im) => im,
             _ => continue,
         };
-        let data: Arc<[u8]> = img.image_data(&resolver)?;
+        let (data, filter) = img.raw_image_data(&resolver)?;
+        let ext = match filter {
+            Some(StreamFilter::DCTDecode(_)) => "jpg",
+            Some(StreamFilter::JBIG2Decode(_)) => "jbig2",
+            Some(StreamFilter::JPXDecode) => "jp2k",
+            Some(StreamFilter::CCITTFaxDecode(_)) => "tiff",
+            Some(StreamFilter::FlateDecode(_)) => "png",
+            _ => {
+                if log_enabled!(Level::Warn) {
+                    let hex_dump: Vec<String> =
+                        data.iter().take(8).map(|b| format!("{:02x}", b)).collect();
+                    warn!(
+                    "UNSUPPORTED IMAGE FORMAT. TOP_8 : {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                    hex_dump.join("_"),
+                    dest_dir_path.display(),
+                    page_count,
+                    image_count
+                );
+                }
+                continue;
+            }
+        };
 
         //PDFファイル内の同じ画像はスキップする。
-        let hash: String = format!("{:x}", Sha256::digest(&data));
-
-        info!("IMAGE HASH: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
-        hash,
-        dest_dir_path.display(),
-        page_count,
-        image_count);
-
-        let read_set: std::sync::RwLockReadGuard<HashSet<String>> = images_kvs.read().unwrap();
-        if read_set.contains(&hash) {
-            info!("IMAGE FILE ALREADY EXISTS. HASH: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
-            hash,
-            dest_dir_path.display(),
-            page_count,
-            image_count);
-            continue;
-        }
-
-        if let Ok(format) = guess_format(&data) {
-            info!("IMAGE_FOUND. FORMAT: {:?} HASH: {}", format, hash);
-            let mut write_set: std::sync::RwLockWriteGuard<HashSet<String>> =
-                images_kvs.write().unwrap();
-            let image = image::load_from_memory(&data).unwrap();
-            let save_path_str = format!(
-                "{}/image_{:?}_{:?}_{}_{}_{}.{}",
-                dest_dir_path.display(),
-                unixtime_val,
-                format!("{:?}", parent_thread_id),
-                page_count,
-                format!("{:?}", my_thread_id),
-                image_count,
-                format.extensions_str()[0]
-            );
-            let mut output = match File::create(save_path_str) {
-                Ok(file) => file,
-                Err(e) => {
-                    warn!(
-                        "COULD NOT CREATE IMAGE FILE. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
-                        dest_dir_path.display(),
-                        page_count,
-                        image_count,
-                        e
-                    );
-                    continue;
-                }
-            };
-            match image.write_to(&mut output, format) {
-                Ok(_) => {
+        {
+            let read_set = images_kvs.read().unwrap();
+            if read_set.contains(&data) {
+                if log_enabled!(Level::Debug) {
                     info!(
-                        "IMAGE FILE WRITTEN. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                        "IMAGE FILE ALREADY EXISTS. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
                         dest_dir_path.display(),
                         page_count,
                         image_count
                     );
-                    write_set.insert(hash);
-                    info!(
-                        "HASHSET_LENGTH: {} DEST_PATH: {}",
-                        write_set.len(),
-                        dest_dir_path.display()
-                    );
                 }
-                Err(e) => {
-                    warn!(
-                        "COULD NOT WRITE IMAGE FILE. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
-                        dest_dir_path.display(),
-                        page_count,
-                        image_count,
-                        e
-                    );
-                    continue;
-                }
-            };
+                continue;
+            }
         }
+        {
+            let mut write_set = images_kvs.write().unwrap();
+            write_set.insert(data.clone());
+            if log_enabled!(Level::Info) {
+                info!(
+                    "NEW HASH INSERTED. HASHSET_LENGTH: {} DEST_PATH: {} PAGE: {} IMAGE_COUNT : {}",
+                    write_set.len(),
+                    dest_dir_path.display(),
+                    page_count,
+                    image_count
+                );
+            }
+        }
+        
+        let save_path_str = format!(
+            "{}/image_{}_{:06}_{:06}_{:?}_{:?}.{}",
+            dest_dir_path.display(),
+            unixtime_val,
+            image_count,
+            page_count,
+            parent_thread_id,
+            my_thread_id,
+            ext
+        );
+        
+        let mut output = match File::create(&save_path_str) {
+            Ok(file) => file,
+            Err(e) => {
+                warn!(
+                    "COULD NOT CREATE IMAGE FILE. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
+                    save_path_str, page_count, image_count, e
+                );
+                continue;
+            }
+        };
+        match output.write(&data) {
+            Ok(_) => {
+                info!(
+                    "IMAGE FILE WRITTEN. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                    dest_dir_path.display(),
+                    page_count,
+                    image_count
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "COULD NOT WRITE IMAGE FILE. DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
+                    dest_dir_path.display(),
+                    page_count,
+                    image_count,
+                    e
+                );
+                continue;
+            }
+        };
     }
     Ok(0)
 }
