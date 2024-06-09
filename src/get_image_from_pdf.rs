@@ -360,11 +360,50 @@ where
 mod tests {
     use super::*;
 
+    use std::fs;
+    use std::path::Path;
+
+    fn check_files_with_extension(directory: &str, extension: &str) -> bool {
+        let entries = fs::read_dir(directory).expect("Unable to read directory");
+        for entry in entries {
+            let entry = entry.expect("Unable to read directory entry");
+            let path = entry.path();
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some(extension) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     #[test_log::test]
+    ///正常なPDFファイルから画像を取得するテスト
+    /// 1.正常なPDFファイルを指定して画像を取得する。
+    /// 2.画像が取得できたか確認する。
+    /// 3.画像が取得できた場合は画像が入っているディレクトリを削除する。
+    /// 4.ディレクトリが削除されたか確認する。
+    /// (画像のファイル名が正しいかどうかについてはテストしない。)
     fn test_get_images_valid_pdf() {
-        let pdf_file_path = Arc::new(Path::new("test_pdf/correct_pdf/aaa.pdf"));
+        let dir_str: &str = "test_pdf/correct_pdf";
+        let file_name_str: &str ="aaa";
+        let pdf_extension: &str = "pdf";
+        let file_string:String = format!("{}/{}.{}",dir_str,file_name_str,pdf_extension);
+        let pdf_file_path = Arc::new(Path::new(file_string.as_str()));
         let result = get_images(pdf_file_path);
         assert_eq!(result, 0);
+        let extension = "jpg";
+        let dest_dir_string:String = format!("{}/{}",dir_str,file_name_str);
+        let exists = check_files_with_extension(dest_dir_string.as_str(), extension);
+        assert_eq!(exists, true);
+        //ディレクトリを削除する。
+        if exists {
+            let dest_cp = dest_dir_string.clone();
+            let res = fs::remove_dir_all(dest_dir_string);
+            if res.is_err() {
+                panic!("COULD NOT REMOVE DIRECTORY. DIRECTORY: {} ERR: {}", dest_cp, res.err().unwrap());
+            }
+            assert_eq!(res.is_ok(), true);
+        }
     }
 
     #[test_log::test]
