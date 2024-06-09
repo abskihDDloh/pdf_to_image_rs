@@ -22,6 +22,16 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use threadpool::ThreadPool;
 
+///PDFファイルから画像を取得する。
+/// # Arguments
+/// * `pdf_file_path` - PDFファイルのパス
+/// # Returns
+/// * 成功時は0を返す。
+/// * 失敗時はエラーコードを返す。
+/// * 10:PDFファイルのフルパス取得失敗
+/// * 11:ディレクトリ作成失敗
+/// * 12:PDFファイルオープン失敗
+/// 
 pub fn get_images(pdf_file_path: &Path) -> i64 {
     let dt: DateTime<Utc> = Utc::now();
     let unixtime_val: i64 = dt.timestamp_millis();
@@ -125,6 +135,19 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
     return 0;
 }
 
+///PDFファイルのページから画像を取得する。
+/// # Arguments
+/// * `page` - PDFファイルのページ
+/// * `file` - PDFファイル
+/// * `images_kvs` - 画像データのハッシュセット
+/// * `dest_dir_path` - 画像ファイルの保存先ディレクトリ
+/// * `parent_thread_id` - 親スレッドのID
+/// * `unixtime_val` - 現在時刻のUNIXTIME
+/// * `page_count` - ページ番号
+/// # Returns
+/// * 成功時は0を返す。
+/// * 失敗時はエラーコードを返す。
+/// * (0以外のエラーコードには、少なくとも一部の画像取得に失敗した以外の意味はない。失敗の詳細は出力されるロクに出力される。)
 fn get_images_from_page<T, K, Y, L>(
     page: &PageRc,
     file: Arc<PdfFile<T, K, Y, L>>,
@@ -140,6 +163,7 @@ where
     Y: Cache<std::result::Result<Arc<[u8]>, Arc<PdfError>>>,
     L: Log,
 {
+    let mut return_value: i64 = 0;
     let re = Regex::new(r"\d+").unwrap();
     let my_thread_id: std::thread::ThreadId = thread::current().id();
 
@@ -188,7 +212,10 @@ where
 
         let img = match **o.1 {
             XObject::Image(ref im) => im,
-            _ => continue,
+            _ => {
+                return_value += 1;
+                continue;
+            }
         };
         let (data, filter) = img.raw_image_data(&resolver)?;
         let ext = match filter {
@@ -208,6 +235,7 @@ where
                     image_count
                 );
                 }
+                return_value += 1;
                 continue;
             }
         };
@@ -225,11 +253,12 @@ where
                         image_count
                     );
                 }
+                return_value += 1;
                 continue;
             }
         }
         {
-            //書き込みロック取得後の再確認。
+            //まだ処理されていない画像であればHashSetの書き込みロックを取得して再確認する。
             let mut write_set = images_kvs.write().unwrap();
             if write_set.contains(&data) {
                 if log_enabled!(Level::Debug) {
@@ -241,8 +270,60 @@ where
                         image_count
                     );
                 }
+                return_value += 1;
                 continue;
             }
+
+            //埋め込みオブジェクト名の数字を6桁に変換する。
+            let converted_embbeded_object_name: std::borrow::Cow<str> =
+                re.replace_all(o.0, |caps: &Captures| {
+                    let num: u32 = (&caps[0]).parse().unwrap();
+                    format!("{:06}", num)
+                });
+
+            let save_path_str = format!(
+                "{}/image_{}_{}_{:06}_{:06}_{:06}_{:06}.{}",
+                dest_dir_path.display(),
+                unixtime_val,
+                converted_embbeded_object_name,
+                image_count,
+                page_count,
+                get_thread_id_number(parent_thread_id),
+                get_thread_id_number(&my_thread_id),
+                ext
+            );
+
+            //画像ファイルを作成する。
+            let mut output = match File::create(&save_path_str) {
+                Ok(file) => file,
+                Err(e) => {
+                    warn!(
+                    "COULD NOT CREATE IMAGE FILE. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
+                    o.0,save_path_str, page_count, image_count, e
+                );
+                    return_value += 1;
+                    continue;
+                }
+            };
+
+            //画像ファイルの書き込みを行う。
+            match output.write(&data) {
+                Ok(_) => {
+                    info!(
+                    "IMAGE FILE WRITTEN. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                    o.0,save_path_str, page_count, image_count
+                );
+                }
+                Err(e) => {
+                    warn!(
+                    "COULD NOT WRITE IMAGE FILE. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
+                    o.0,save_path_str, page_count, image_count, e
+                );
+                    return_value += 1;
+                    continue;
+                }
+            };
+            //ファイルの書き込みに成功したらHashSetに画像データのハッシュを追加する。
             write_set.insert(data.clone());
             if log_enabled!(Level::Debug) {
                 info!(
@@ -255,53 +336,8 @@ where
                 );
             }
         }
-
-        //埋め込みオブジェクト名の数字を6桁に変換する。
-        let converted_embbeded_object_name: std::borrow::Cow<str> =
-            re.replace_all(o.0, |caps: &Captures| {
-                let num: u32 = (&caps[0]).parse().unwrap();
-                format!("{:06}", num)
-            });
-
-        let save_path_str = format!(
-            "{}/image_{}_{}_{:06}_{:06}_{:06}_{:06}.{}",
-            dest_dir_path.display(),
-            unixtime_val,
-            converted_embbeded_object_name,
-            image_count,
-            page_count,
-            get_thread_id_number(parent_thread_id),
-            get_thread_id_number(&my_thread_id),
-            ext
-        );
-
-        let mut output = match File::create(&save_path_str) {
-            Ok(file) => file,
-            Err(e) => {
-                warn!(
-                    "COULD NOT CREATE IMAGE FILE. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
-                    o.0,save_path_str, page_count, image_count, e
-                );
-                continue;
-            }
-        };
-        match output.write(&data) {
-            Ok(_) => {
-                info!(
-                    "IMAGE FILE WRITTEN. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
-                    o.0,save_path_str, page_count, image_count
-                );
-            }
-            Err(e) => {
-                warn!(
-                    "COULD NOT WRITE IMAGE FILE. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {} ERR: {}",
-                    o.0,save_path_str, page_count, image_count, e
-                );
-                continue;
-            }
-        };
     }
-    Ok(0)
+    Ok(return_value)
 }
 
 #[cfg(test)]
