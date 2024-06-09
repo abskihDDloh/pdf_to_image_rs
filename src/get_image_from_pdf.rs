@@ -2,7 +2,7 @@ use crate::check_path::is_valid_file;
 use crate::get_thread_id::get_thread_id_number;
 use crate::set_workers_limit::get_sub_workers_limit;
 
-use chrono::{DateTime, Utc};
+use chrono::{self, Utc};
 use log::{error, info, log_enabled, warn, Level};
 use pdf::any::AnySync;
 use pdf::backend::Backend;
@@ -28,17 +28,16 @@ use threadpool::ThreadPool;
 /// # Returns
 /// * 成功時は0を返す。
 /// * 失敗時はエラーコードを返す。
-/// * 10:PDFファイルのフルパス取得失敗
-/// * 11:ディレクトリ作成失敗
-/// * 12:PDFファイルオープン失敗
-/// 
-pub fn get_images(pdf_file_path: &Path) -> i64 {
-    let dt: DateTime<Utc> = Utc::now();
-    let unixtime_val: i64 = dt.timestamp_millis();
+/// * 20:PDFファイルのフルパス取得失敗
+/// * 21:ディレクトリ作成失敗
+/// * 22:PDFファイルオープン失敗
+///
+pub fn get_images(pdf_file_path: Arc<&Path>) -> i64 {
+    let start_time: i64 = Utc::now().timestamp_micros();
     let my_thread_id: std::thread::ThreadId = thread::current().id();
 
     //受け取ったファイルのパスをフルパスに変換する。
-    let pdf_path = match is_valid_file(pdf_file_path) {
+    let pdf_path = match is_valid_file(&pdf_file_path.to_owned()) {
         Ok(path) => path,
         Err(e) => {
             error!(
@@ -46,7 +45,7 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
                 pdf_file_path.display(),
                 e
             );
-            return 10;
+            return 20;
         }
     };
 
@@ -62,7 +61,7 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
                     dest_dir_path.display(),
                     e
                 );
-                return 11;
+                return 21;
             }
         }
     } else {
@@ -83,7 +82,7 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
                 pdf_path.display(),
                 e
             );
-            return 12;
+            return 22;
         }
     });
 
@@ -111,9 +110,9 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
         let file_ref = Arc::clone(&file);
         let image_hash_list_ref = Arc::clone(&image_hash_list);
         let dest_dir_path_ref = Arc::clone(&dest_dir_path);
+        let pdf_parh_string: String = pdf_path.display().to_string();
 
         //get_images_from_page()を使ってスレッドを生成して画像を取得する。
-
         // スレッドプールにタスクを追加
         pool.execute(move || {
             match get_images_from_page(
@@ -122,16 +121,33 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
                 image_hash_list_ref,
                 dest_dir_path_ref,
                 &my_thread_id,
-                unixtime_val,
+                start_time,
                 page_counter,
             ) {
-                Ok(result) => println!("Thread finished with result: {}", result),
-                Err(e) => println!("Thread encountered an error: {}", e),
+                Ok(result) => {
+                    if log_enabled!(Level::Debug) {
+                        info!(
+                            "PAGE PROCESS COMPLETE. PAGE: {} FILE : {} RESULT : {}",
+                            page_counter, pdf_parh_string, result
+                        )
+                    }
+                }
+                Err(e) => error!(
+                    "PAGE PROCESS ERROR. PAGE: {} FILE : {} ERR : {}",
+                    page_counter, pdf_parh_string, e
+                ),
             }
         });
     }
     // 全てのタスクが終了するのを待つ
     pool.join();
+    let end_time: i64 = Utc::now().timestamp_micros();
+    let elapsed_time: i64 = end_time - start_time;
+    info!(
+        "ALL THREADS FINISHED. FILE: {} ELAPSED_TIME : {}",
+        pdf_path.display(),
+        elapsed_time
+    );
     return 0;
 }
 
@@ -139,11 +155,11 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
 /// # Arguments
 /// * `page` - PDFファイルのページ
 /// * `file` - PDFファイル
-/// * `images_kvs` - 画像データのハッシュセット
+/// * `images_kvs` - 画像データのハッシュセット(スレッド感で共有するためArc<RwLock<HashSet<Arc<[u8]>>>>)
 /// * `dest_dir_path` - 画像ファイルの保存先ディレクトリ
-/// * `parent_thread_id` - 親スレッドのID
-/// * `unixtime_val` - 現在時刻のUNIXTIME
-/// * `page_count` - ページ番号
+/// * `parent_thread_id` - 親スレッドのID(保存する画像のファイル名に使用するため)
+/// * `unixtime_val` - 現在時刻のUNIXTIME(保存する画像のファイル名に使用するため)
+/// * `page_count` - PDFのページ番号(保存する画像のファイル名に使用するため)
 /// # Returns
 /// * 成功時は0を返す。
 /// * 失敗時はエラーコードを返す。
@@ -187,7 +203,7 @@ where
     for (name, &r) in resources.xobjects.iter() {
         let object = resolver.get(r).unwrap();
         if matches!(*object, pdf::object::XObject::Image(_)) {
-            if (log_enabled!(Level::Debug)) {
+            if log_enabled!(Level::Debug) {
                 log::info!(
                     "XObject_Name: {} DEST_PATH : {} PAGE: {}",
                     name,
@@ -198,12 +214,13 @@ where
             images.insert(name.clone(), object.clone());
         }
     }
-
-    log::info!(
-        "THIS PAGE IMAGES COUNT. PAGE : {} IMAGES: {}",
-        page_count,
-        images.len()
-    );
+    if log_enabled!(Level::Debug) {
+        log::info!(
+            "THIS PAGE IMAGES COUNT. PAGE : {} IMAGES: {}",
+            page_count,
+            images.len()
+        );
+    }
 
     let mut image_count: i64 = 0;
 
@@ -213,7 +230,6 @@ where
         let img = match **o.1 {
             XObject::Image(ref im) => im,
             _ => {
-                return_value += 1;
                 continue;
             }
         };
@@ -253,7 +269,6 @@ where
                         image_count
                     );
                 }
-                return_value += 1;
                 continue;
             }
         }
@@ -270,7 +285,6 @@ where
                         image_count
                     );
                 }
-                return_value += 1;
                 continue;
             }
 
@@ -309,10 +323,12 @@ where
             //画像ファイルの書き込みを行う。
             match output.write(&data) {
                 Ok(_) => {
-                    info!(
-                    "IMAGE FILE WRITTEN. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
-                    o.0,save_path_str, page_count, image_count
-                );
+                    if log_enabled!(Level::Debug) {
+                        info!(
+                        "IMAGE FILE WRITTEN. OBJECT_NAME: {} DEST_PATH : {} PAGE: {} IMAGE_COUNT : {}",
+                        o.0,save_path_str, page_count, image_count
+                    );
+                    }
                 }
                 Err(e) => {
                     warn!(
@@ -343,14 +359,32 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
-    #[test]
-    fn test_get_images() {
-        env::set_var("RUST_LOG", "info");
-        env_logger::init();
-        let pdf_file_path = Path::new("test_pdf/correct_pdf/aaa.pdf");
+    #[test_log::test]
+    fn test_get_images_valid_pdf() {
+        let pdf_file_path = Arc::new(Path::new("test_pdf/correct_pdf/aaa.pdf"));
         let result = get_images(pdf_file_path);
         assert_eq!(result, 0);
+    }
+
+    #[test_log::test]
+    fn test_get_images_invalid_pdf() {
+        let pdf_file_path = Arc::new(Path::new("path/to/invalid.pdf"));
+        let result = get_images(pdf_file_path);
+        assert_ne!(result, 0);
+    }
+
+    #[test_log::test]
+    fn test_get_images_existing_directory() {
+        let pdf_file_path = Arc::new(Path::new("test_pdf/correct_pdf"));
+        let result = get_images(pdf_file_path);
+        assert_eq!(result, 20);
+    }
+
+    #[test_log::test]
+    fn test_get_images_non_existing_directory() {
+        let pdf_file_path = Arc::new(Path::new("path/to/non_existing_directory"));
+        let result = get_images(pdf_file_path);
+        assert_ne!(result, 0);
     }
 }

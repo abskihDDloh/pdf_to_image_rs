@@ -108,7 +108,7 @@ mod tests {
         let path = Path::new("test_pdf/empty_dir");
         let result = is_valid_directory(&path);
         assert!(result.is_ok());
-        let fill_path = result.unwrap();
+        let _fill_path = result.unwrap();
     }
 
     #[test]
@@ -130,7 +130,7 @@ mod tests {
         let path = Path::new("test_pdf/dummy_pdf_files_dir/file1.pdf");
         let result = is_valid_file(&path);
         assert!(result.is_ok());
-        let full_path = result.unwrap();
+        let _full_path = result.unwrap();
     }
 
     #[test]
