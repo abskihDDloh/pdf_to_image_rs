@@ -385,14 +385,14 @@ mod tests {
     /// (画像のファイル名が正しいかどうかについてはテストしない。)
     fn test_get_images_valid_pdf() {
         let dir_str: &str = "test_pdf/correct_pdf";
-        let file_name_str: &str ="aaa";
+        let file_name_str: &str = "aaa";
         let pdf_extension: &str = "pdf";
-        let file_string:String = format!("{}/{}.{}",dir_str,file_name_str,pdf_extension);
+        let file_string: String = format!("{}/{}.{}", dir_str, file_name_str, pdf_extension);
         let pdf_file_path = Arc::new(Path::new(file_string.as_str()));
         let result = get_images(pdf_file_path);
         assert_eq!(result, 0);
         let extension = "jpg";
-        let dest_dir_string:String = format!("{}/{}",dir_str,file_name_str);
+        let dest_dir_string: String = format!("{}/{}", dir_str, file_name_str);
         let exists = check_files_with_extension(dest_dir_string.as_str(), extension);
         assert_eq!(exists, true);
         //ディレクトリを削除する。
@@ -400,7 +400,11 @@ mod tests {
             let dest_cp = dest_dir_string.clone();
             let res = fs::remove_dir_all(dest_dir_string);
             if res.is_err() {
-                panic!("COULD NOT REMOVE DIRECTORY. DIRECTORY: {} ERR: {}", dest_cp, res.err().unwrap());
+                panic!(
+                    "COULD NOT REMOVE DIRECTORY. DIRECTORY: {} ERR: {}",
+                    dest_cp,
+                    res.err().unwrap()
+                );
             }
             assert_eq!(res.is_ok(), true);
         }

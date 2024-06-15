@@ -21,7 +21,11 @@ use threadpool::ThreadPool;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Name of the person to greet
-    #[arg(short = 's', long = "pdfdir", help = "pdfファイルが格納されているディレクトリのパスを指定します。")]
+    #[arg(
+        short = 's',
+        long = "pdfdir",
+        help = "pdfファイルが格納されているディレクトリのパスを指定します。"
+    )]
     pdfdir: String,
 
     #[arg(short = 'd', long = "debug", help = "でバッグモードを有効にします。")]
@@ -66,7 +70,10 @@ fn start(directory_path: &Path) -> i64 {
             let result: i64 = get_images(file_path_clone);
             match result {
                 0 => info!("PDF FILE PROCESS COMPLETE. FILE : {:?}", file_path),
-                _ => error!("PDF FILEeeee PROCESS ERROR. FILE : {:?} RESULT : {}", file_path, result),
+                _ => error!(
+                    "PDF FILEeeee PROCESS ERROR. FILE : {:?} RESULT : {}",
+                    file_path, result
+                ),
             }
             ()
         });
@@ -91,6 +98,9 @@ fn main() {
     let return_value = start(path);
     let end_time: i64 = Utc::now().timestamp_micros();
     let elapsed_time: i64 = end_time - start_time;
-    info!("END PDF TO IMAGE CONVERTER. ELAPSED_TIME : {}", elapsed_time);
+    info!(
+        "END PDF TO IMAGE CONVERTER. ELAPSED_TIME : {}",
+        elapsed_time
+    );
     std::process::exit(return_value as i32);
 }
