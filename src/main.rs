@@ -26,7 +26,7 @@ struct Args {
     )]
     pdfdir: String,
 
-    #[arg(short = 'd', long = "debug", help = "でバッグモードを有効にします。")]
+    #[arg(short = 'd', long = "debug", help = "デバッグモードを有効にします。")]
     debug: bool,
 }
 
@@ -58,7 +58,7 @@ fn start(directory_path: &Path) -> i64 {
             match result {
                 0 => info!("PDF FILE PROCESS COMPLETE. FILE : {:?}", file_path),
                 _ => error!(
-                    "PDF FILEeeee PROCESS ERROR. FILE : {:?} RESULT : {}",
+                    "PDF FILE PROCESS ERROR. FILE : {:?} RESULT : {}",
                     file_path, result
                 ),
             }
