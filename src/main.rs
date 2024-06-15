@@ -31,7 +31,7 @@ struct Args {
 }
 
 fn start(directory_path: &Path) -> i64 {
-    let mut return_value: i64 = 12;
+    let mut return_value: i64 = 0;
     let src_dir: std::path::PathBuf = match is_valid_directory(directory_path) {
         Ok(path) => path,
         Err(e) => {
@@ -49,7 +49,6 @@ fn start(directory_path: &Path) -> i64 {
             return 11;
         }
     };
-
     let _pool = ThreadPool::new(get_main_workers_limit());
     for file in _pdf_files {
         _pool.execute(move || {
@@ -57,23 +56,26 @@ fn start(directory_path: &Path) -> i64 {
             let file_path_clone = Path::new(file_path);
             let result: i64 = get_images(file_path_clone);
             match result {
-                0 => info!("PDF FILE PROCESS COMPLETE. FILE : {:?}", file_path),
+                0 => {
+                    info!("PDF FILE PROCESS COMPLETE. FILE : {:?}", file_path);
+                }
                 _ => {
                     error!(
                         "PDF FILE PROCESS ERROR. FILE : {:?} RESULT : {}",
                         file_path, result
                     );
-                    return_value += result
+                    if return_value == 0 {
+                        return_value = 1;
+                        if log::log_enabled!(log::Level::Debug) {
+                            info!("START RETURN VALUE : {}", return_value);
+                        }
+                    }
                 }
             }
         });
     }
     // 全てのタスクが終了するのを待つ
     _pool.join();
-
-    if return_value == 12 {
-        return 0;
-    }
     return_value
 }
 
