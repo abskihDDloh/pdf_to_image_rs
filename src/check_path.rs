@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn test_is_valid_directory_valid_directory() {
         let path = Path::new("test_pdf");
-        let result = is_valid_directory(&path);
+        let result = is_valid_directory(path);
         assert!(result.is_ok());
         let _fill_path = result.unwrap();
     }
@@ -114,21 +114,21 @@ mod tests {
     #[test]
     fn test_is_valid_directory_invalid_directory() {
         let path = Path::new("test_pdf/dummy_notpdf_files_dir/file1.txt");
-        let result = is_valid_directory(&path);
+        let result = is_valid_directory(path);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_is_valid_directory_failed_conversion() {
         let path = Path::new("nonexistent_dir");
-        let result = is_valid_directory(&path);
+        let result = is_valid_directory(path);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_is_valid_file_valid_file() {
         let path = Path::new("test_pdf/dummy_pdf_files_dir/file1.pdf");
-        let result = is_valid_file(&path);
+        let result = is_valid_file(path);
         assert!(result.is_ok());
         let _full_path = result.unwrap();
     }
@@ -136,14 +136,14 @@ mod tests {
     #[test]
     fn test_is_valid_file_invalid_file() {
         let path = Path::new("test_pdf");
-        let result = is_valid_file(&path);
+        let result = is_valid_file(path);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_is_valid_file_failed_conversion() {
         let path = Path::new("nonexistent_file.pdf");
-        let result = is_valid_file(&path);
+        let result = is_valid_file(path);
         assert!(result.is_err());
     }
 }

@@ -394,7 +394,7 @@ mod tests {
         let extension = "jpg";
         let dest_dir_string: String = format!("{}/{}", dir_str, file_name_str);
         let exists = check_files_with_extension(dest_dir_string.as_str(), extension);
-        assert_eq!(exists, true);
+        assert!(exists);
         //ディレクトリを削除する。
         if exists {
             let dest_cp = dest_dir_string.clone();
@@ -406,7 +406,7 @@ mod tests {
                     res.err().unwrap()
                 );
             }
-            assert_eq!(res.is_ok(), true);
+            assert!(res.is_ok());
         }
     }
 
