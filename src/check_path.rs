@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn test_is_valid_directory_valid_directory() {
-        let path = Path::new("test_pdf/empty_dir");
+        let path = Path::new("test_pdf");
         let result = is_valid_directory(&path);
         assert!(result.is_ok());
         let _fill_path = result.unwrap();
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_is_valid_file_invalid_file() {
-        let path = Path::new("test_pdf/empty_dir");
+        let path = Path::new("test_pdf");
         let result = is_valid_file(&path);
         assert!(result.is_err());
     }
