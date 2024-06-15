@@ -31,6 +31,7 @@ struct Args {
 }
 
 fn start(directory_path: &Path) -> i64 {
+    let mut return_value: i64 = 12;
     let src_dir: std::path::PathBuf = match is_valid_directory(directory_path) {
         Ok(path) => path,
         Err(e) => {
@@ -57,16 +58,23 @@ fn start(directory_path: &Path) -> i64 {
             let result: i64 = get_images(file_path_clone);
             match result {
                 0 => info!("PDF FILE PROCESS COMPLETE. FILE : {:?}", file_path),
-                _ => error!(
+                _ => {error!(
                     "PDF FILE PROCESS ERROR. FILE : {:?} RESULT : {}",
                     file_path, result
-                ),
+                );
+                return_value = return_value + result;
+                
+            },
             }
         });
     }
     // 全てのタスクが終了するのを待つ
     _pool.join();
-    0
+
+    if return_value == 12 {
+        return 0;
+    }
+    return_value
 }
 
 fn main() {
@@ -90,3 +98,4 @@ fn main() {
     );
     std::process::exit(return_value as i32);
 }
+
