@@ -22,12 +22,12 @@ fn get_full_path(src_path: &Path) -> std::io::Result<PathBuf> {
 ///
 /// # Arguments
 ///
-/// * `src_path` - The `PathBuf` to be converted.
+/// * `src_path` - The `Path` to be converted.
 ///
 /// # Returns
 ///
 /// Returns a `Result` containing the string representation of the path if successful, or an `std::io::Error` if an error occurs.
-fn get_path_str(src_path: &PathBuf) -> std::io::Result<&str> {
+fn get_path_str(src_path: &Path) -> std::io::Result<&str> {
     let path_str_option: Option<&str> = src_path.to_str();
     let path_str = match path_str_option {
         Some(s) => s,

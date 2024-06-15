@@ -32,7 +32,7 @@ use threadpool::ThreadPool;
 /// * 21:ディレクトリ作成失敗
 /// * 22:PDFファイルオープン失敗
 ///
-pub fn get_images(pdf_file_path: Arc<&Path>) -> i64 {
+pub fn get_images(pdf_file_path: &Path) -> i64 {
     let start_time: i64 = Utc::now().timestamp_micros();
     let my_thread_id: std::thread::ThreadId = thread::current().id();
 
@@ -148,7 +148,7 @@ pub fn get_images(pdf_file_path: Arc<&Path>) -> i64 {
         pdf_path.display(),
         elapsed_time
     );
-    return 0;
+    0
 }
 
 ///PDFファイルのページから画像を取得する。
@@ -291,7 +291,7 @@ where
             //埋め込みオブジェクト名の数字を6桁に変換する。
             let converted_embbeded_object_name: std::borrow::Cow<str> =
                 re.replace_all(o.0, |caps: &Captures| {
-                    let num: u32 = (&caps[0]).parse().unwrap();
+                    let num: u32 = (caps[0]).parse().unwrap();
                     format!("{:06}", num)
                 });
 
@@ -321,7 +321,7 @@ where
             };
 
             //画像ファイルの書き込みを行う。
-            match output.write(&data) {
+            match output.write_all(&data) {
                 Ok(_) => {
                     if log_enabled!(Level::Debug) {
                         info!(
@@ -388,7 +388,7 @@ mod tests {
         let file_name_str: &str = "aaa";
         let pdf_extension: &str = "pdf";
         let file_string: String = format!("{}/{}.{}", dir_str, file_name_str, pdf_extension);
-        let pdf_file_path = Arc::new(Path::new(file_string.as_str()));
+        let pdf_file_path = Path::new(file_string.as_str());
         let result = get_images(pdf_file_path);
         assert_eq!(result, 0);
         let extension = "jpg";
@@ -412,21 +412,21 @@ mod tests {
 
     #[test_log::test]
     fn test_get_images_invalid_pdf() {
-        let pdf_file_path = Arc::new(Path::new("path/to/invalid.pdf"));
+        let pdf_file_path = Path::new("path/to/invalid.pdf");
         let result = get_images(pdf_file_path);
         assert_ne!(result, 0);
     }
 
     #[test_log::test]
     fn test_get_images_existing_directory() {
-        let pdf_file_path = Arc::new(Path::new("test_pdf/correct_pdf"));
+        let pdf_file_path = Path::new("test_pdf/correct_pdf");
         let result = get_images(pdf_file_path);
         assert_eq!(result, 20);
     }
 
     #[test_log::test]
     fn test_get_images_non_existing_directory() {
-        let pdf_file_path = Arc::new(Path::new("path/to/non_existing_directory"));
+        let pdf_file_path = Path::new("path/to/non_existing_directory");
         let result = get_images(pdf_file_path);
         assert_ne!(result, 0);
     }

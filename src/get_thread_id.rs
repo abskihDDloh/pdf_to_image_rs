@@ -35,8 +35,5 @@ fn _get_thread_id_number(id: &ThreadId) -> Option<u64> {
 /// The numeric ID of the thread. If the ID cannot be parsed, it returns 0.
 pub fn get_thread_id_number(id: &ThreadId) -> u64 {
     let res: Option<u64> = _get_thread_id_number(id);
-    match res {
-        Some(num) => num,
-        None => 0,
-    }
+    res.unwrap_or(0)
 }
