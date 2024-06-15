@@ -4,7 +4,7 @@ use sysinfo::System;
 pub fn get_main_workers_limit() -> usize {
     let core_count: usize = match num_cpus::get() {
         0 => 1,
-        n => n as usize,
+        n => n,
     };
     let workers_limit: usize = (core_count - 1) / 4;
     if workers_limit == 0 {
@@ -42,7 +42,7 @@ pub fn get_sub_workers_limit(boost_percentage: f32) -> usize {
         0
     };
     let sub_workers_limit: usize = match sub_workers_limit {
-        n if n == 0 => 1,
+        0 => 1,
         n => n,
     };
     if boost_percentage < 0.0 {

@@ -51,7 +51,7 @@ fn start(directory_path: &Path) -> i64 {
 
     let _pool = ThreadPool::new(get_main_workers_limit());
     for file in _pdf_files {
-        let _handle = _pool.execute(move || {
+        _pool.execute(move || {
             let file_path = file.as_path();
             let file_path_clone = Path::new(file_path);
             let result: i64 = get_images(file_path_clone);

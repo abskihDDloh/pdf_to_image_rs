@@ -37,7 +37,7 @@ pub fn get_images(pdf_file_path: &Path) -> i64 {
     let my_thread_id: std::thread::ThreadId = thread::current().id();
 
     //受け取ったファイルのパスをフルパスに変換する。
-    let pdf_path = match is_valid_file(&pdf_file_path.to_owned()) {
+    let pdf_path = match is_valid_file(pdf_file_path) {
         Ok(path) => path,
         Err(e) => {
             error!(
