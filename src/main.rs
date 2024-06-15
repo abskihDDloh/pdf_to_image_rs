@@ -58,13 +58,13 @@ fn start(directory_path: &Path) -> i64 {
             let result: i64 = get_images(file_path_clone);
             match result {
                 0 => info!("PDF FILE PROCESS COMPLETE. FILE : {:?}", file_path),
-                _ => {error!(
-                    "PDF FILE PROCESS ERROR. FILE : {:?} RESULT : {}",
-                    file_path, result
-                );
-                return_value = return_value + result;
-                
-            },
+                _ => {
+                    error!(
+                        "PDF FILE PROCESS ERROR. FILE : {:?} RESULT : {}",
+                        file_path, result
+                    );
+                    return_value = return_value + result;
+                }
             }
         });
     }
@@ -98,4 +98,3 @@ fn main() {
     );
     std::process::exit(return_value as i32);
 }
-
