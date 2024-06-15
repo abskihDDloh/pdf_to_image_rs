@@ -63,7 +63,7 @@ fn start(directory_path: &Path) -> i64 {
                         "PDF FILE PROCESS ERROR. FILE : {:?} RESULT : {}",
                         file_path, result
                     );
-                    return_value = return_value + result;
+                    return_value += result
                 }
             }
         });
