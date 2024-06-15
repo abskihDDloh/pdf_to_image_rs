@@ -1,17 +1,14 @@
-use num_cpus;
 use sysinfo::System;
 
-/// Returns the main workers limit based on the number of CPU cores.
-/// The main workers limit is calculated as the number of CPU cores minus 1, divided by 4 and rounded down to the nearest integer.
-/// If the calculated limit is 0 or less, it is set to 1.
+/// Returns the maximum number of main workers based on the number of CPU cores.
 pub fn get_main_workers_limit() -> usize {
     let core_count: usize = match num_cpus::get() {
         0 => 1,
-        n => n as usize,
-    };
-    let workers_limit: usize = match (core_count - 1) / 4 {
-        n if n <= 0 => 1,
         n => n,
+    };
+    let workers_limit: usize = (core_count - 1) / 4;
+    if workers_limit == 0 {
+        return 1;
     };
     workers_limit
 }
@@ -24,15 +21,19 @@ fn get_cpu_usage() -> f32 {
     cpu_usage
 }
 
-/// Returns the sub workers limit based on the boost percentage.
-/// The sub workers limit is calculated as the difference between the total number of CPU cores and the main workers limit, divided by the main workers limit.
-/// If the main workers limit is 0 or less, the sub workers limit is set to 0.
-/// If the boost percentage is less than 0.0 or greater than 60.0, the sub workers limit remains unchanged.
-/// If the CPU usage is less than the boost percentage, the sub workers limit is doubled.
+/// Returns the maximum number of sub workers based on the number of CPU cores and boost percentage.
+///
+/// # Arguments
+///
+/// * `boost_percentage` - The boost percentage for sub workers. If the CPU usage is below this percentage, the number of sub workers will be doubled.
+///
+/// # Returns
+///
+/// The maximum number of sub workers.
 pub fn get_sub_workers_limit(boost_percentage: f32) -> usize {
     let core_count: usize = match num_cpus::get() {
         0 => 1,
-        n => n as usize,
+        n => n,
     };
     let main_workers = get_main_workers_limit();
     let sub_workers_limit: usize = if main_workers > 0 {
@@ -41,7 +42,7 @@ pub fn get_sub_workers_limit(boost_percentage: f32) -> usize {
         0
     };
     let sub_workers_limit: usize = match sub_workers_limit {
-        n if n <= 0 => 1,
+        0 => 1,
         n => n,
     };
     if boost_percentage < 0.0 {
