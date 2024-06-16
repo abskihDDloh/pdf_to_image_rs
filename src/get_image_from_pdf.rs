@@ -148,7 +148,7 @@ pub fn get_images(pdf_file_path: &Path) -> u32 {
                     if return_value == 0 {
                         return_value = 1;
                         if log::log_enabled!(log::Level::Debug) {
-                            info!("START RETURN VALUE : {}", return_value);
+                            info!("RETURN VALUE : {}", return_value);
                         }
                     }
                 }
