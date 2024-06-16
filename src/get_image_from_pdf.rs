@@ -32,7 +32,7 @@ use threadpool::ThreadPool;
 /// * 21:ディレクトリ作成失敗
 /// * 22:PDFファイルオープン失敗
 ///
-pub fn get_images(pdf_file_path: &Path) -> i64 {
+pub fn get_images(pdf_file_path: &Path) -> u32 {
     let start_time: i64 = Utc::now().timestamp_micros();
     let my_thread_id: std::thread::ThreadId = thread::current().id();
 
@@ -172,14 +172,14 @@ fn get_images_from_page<T, K, Y, L>(
     parent_thread_id: &std::thread::ThreadId,
     unixtime_val: i64,
     page_count: u64,
-) -> Result<i64, PdfError>
+) -> Result<u32, PdfError>
 where
     T: Backend,
     K: Cache<std::result::Result<AnySync, Arc<PdfError>>>,
     Y: Cache<std::result::Result<Arc<[u8]>, Arc<PdfError>>>,
     L: Log,
 {
-    let mut return_value: i64 = 0;
+    let mut return_value: u32 = 0;
     let re = Regex::new(r"\d+").unwrap();
     let my_thread_id: std::thread::ThreadId = thread::current().id();
 
