@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Crate
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Set Toolchain
       # https://github.com/dtolnay/rust-toolchain
       uses: dtolnay/rust-toolchain@master
@@ -31,15 +31,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: actions/checkout@v4
     - name: Set Toolchain
       uses: dtolnay/rust-toolchain@stable
     - name: Build
