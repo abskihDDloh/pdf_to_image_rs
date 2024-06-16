@@ -1,5 +1,4 @@
 mod check_path;
-use crate::check_path::is_valid_directory;
 mod seek_pdf;
 use crate::seek_pdf::seek_pdf_file;
 mod get_image_from_pdf;
@@ -32,21 +31,12 @@ struct Args {
 
 fn start(directory_path: &Path) -> u32 {
     let mut return_value: u32 = 0;
-    let src_dir: std::path::PathBuf = match is_valid_directory(directory_path) {
-        Ok(path) => path,
-        Err(e) => {
-            error!(
-                "INVALID DIRECTORY PATH. PATH : {:?} ERR: {}",
-                directory_path, e
-            );
-            return 10;
-        }
-    };
-    let _pdf_files: Vec<std::path::PathBuf> = match seek_pdf_file(src_dir.as_path()) {
+
+    let _pdf_files: Vec<std::path::PathBuf> = match seek_pdf_file(directory_path) {
         Ok(files) => files,
         Err(e) => {
             error!("ERROR OCCURED WHILE SEEKING PDF FILES. ERR: {}", e);
-            return 11;
+            return 10;
         }
     };
     let _pool = ThreadPool::new(get_main_workers_limit());
