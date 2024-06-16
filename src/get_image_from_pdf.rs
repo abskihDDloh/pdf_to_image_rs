@@ -26,6 +26,7 @@ use threadpool::ThreadPool;
 /// # Arguments
 /// * `pdf_file_path` - PDFファイルのパス
 /// # Returns
+/// * 1:ページ取得失敗もしくはページ内画像取得失敗
 /// * 成功時は0を返す。
 /// * 失敗時はエラーコードを返す。
 /// * 20:PDFファイルのフルパス取得失敗
@@ -33,6 +34,7 @@ use threadpool::ThreadPool;
 /// * 22:PDFファイルオープン失敗
 ///
 pub fn get_images(pdf_file_path: &Path) -> u32 {
+    let mut return_value: u32 = 0;
     let start_time: i64 = Utc::now().timestamp_micros();
     let my_thread_id: std::thread::ThreadId = thread::current().id();
 
@@ -102,6 +104,12 @@ pub fn get_images(pdf_file_path: &Path) -> u32 {
                     page_counter,
                     e
                 );
+                if return_value == 0 {
+                    return_value = 1;
+                    if log::log_enabled!(log::Level::Debug) {
+                        info!("RETURN VALUE : {}", return_value);
+                    }
+                }
                 continue;
             }
         };
@@ -132,10 +140,18 @@ pub fn get_images(pdf_file_path: &Path) -> u32 {
                         )
                     }
                 }
-                Err(e) => error!(
-                    "PAGE PROCESS ERROR. PAGE: {} FILE : {} ERR : {}",
-                    page_counter, pdf_parh_string, e
-                ),
+                Err(e) => {
+                    error!(
+                        "PAGE PROCESS ERROR. PAGE: {} FILE : {} ERR : {}",
+                        page_counter, pdf_parh_string, e
+                    );
+                    if return_value == 0 {
+                        return_value = 1;
+                        if log::log_enabled!(log::Level::Debug) {
+                            info!("START RETURN VALUE : {}", return_value);
+                        }
+                    }
+                }
             }
         });
     }
@@ -148,7 +164,7 @@ pub fn get_images(pdf_file_path: &Path) -> u32 {
         pdf_path.display(),
         elapsed_time
     );
-    0
+    return_value
 }
 
 ///PDFファイルのページから画像を取得する。
