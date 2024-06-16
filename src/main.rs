@@ -30,8 +30,8 @@ struct Args {
     debug: bool,
 }
 
-fn start(directory_path: &Path) -> i64 {
-    let mut return_value: i64 = 0;
+fn start(directory_path: &Path) -> u32 {
+    let mut return_value: u32 = 0;
     let src_dir: std::path::PathBuf = match is_valid_directory(directory_path) {
         Ok(path) => path,
         Err(e) => {
@@ -54,7 +54,7 @@ fn start(directory_path: &Path) -> i64 {
         _pool.execute(move || {
             let file_path = file.as_path();
             let file_path_clone = Path::new(file_path);
-            let result: i64 = get_images(file_path_clone);
+            let result: u32 = get_images(file_path_clone);
             match result {
                 0 => {
                     info!("PDF FILE PROCESS COMPLETE. FILE : {:?}", file_path);
