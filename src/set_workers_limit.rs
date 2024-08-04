@@ -17,8 +17,9 @@ pub fn get_main_workers_limit() -> usize {
 fn get_cpu_usage() -> f32 {
     let mut sys = System::new_all();
     sys.refresh_all();
-    let cpu_usage = sys.global_cpu_info().cpu_usage();
-    cpu_usage
+    let cpus = sys.cpus();
+    let total_usage: f32 = cpus.iter().map(|cpu| cpu.cpu_usage()).sum();
+    total_usage / cpus.len() as f32
 }
 
 /// Returns the maximum number of sub workers based on the number of CPU cores and boost percentage.
@@ -55,5 +56,41 @@ pub fn get_sub_workers_limit(boost_percentage: f32) -> usize {
         sub_workers_limit * 2
     } else {
         sub_workers_limit
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_main_workers_limit() {
+        let main_workers_limit = get_main_workers_limit();
+        //workers_limitが1以上の数値であることを確認する。
+        assert!(main_workers_limit > 0);
+    }
+
+    #[test]
+    fn test_get_sub_workers_limit() {
+        let sub_worker_limit_pm0p1 = get_sub_workers_limit(-0.1);
+        assert!(sub_worker_limit_pm0p1 > 0);
+
+        let sub_worker_limit_p0 = get_sub_workers_limit(0.0);
+        assert!(sub_worker_limit_p0 > 0);
+
+        let sub_worker_limit_p60 = get_sub_workers_limit(60.0);
+        assert!(sub_worker_limit_p60 > 0);
+
+        let sub_worker_limit_p60p1 = get_sub_workers_limit(60.1);
+        assert!(sub_worker_limit_p60p1 > 0);
+
+        //boost_percentageが-0.1の場合と60.1の場合はsub_workers_limitが変わらないことを確認する。
+        assert_eq!(sub_worker_limit_pm0p1, sub_worker_limit_p60p1);
+
+        //boost_percentageが0.0の場合よりも60.0の場合はsub_workers_limitが小さいことを確認する。
+        assert!(sub_worker_limit_p0 <= sub_worker_limit_p60);
+
+        //boost_percentageが60.0の場合よりも60.1の場合はsub_workers_limitが小さいことを確認する。
+        assert!(sub_worker_limit_p60 >= sub_worker_limit_pm0p1);
     }
 }
