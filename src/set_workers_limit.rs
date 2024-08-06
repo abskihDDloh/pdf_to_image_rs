@@ -1,4 +1,4 @@
-use sysinfo::System;
+use sysinfo::{CpuRefreshKind, RefreshKind, System};
 
 /// Returns the maximum number of main workers based on the number of CPU cores.
 pub fn get_main_workers_limit() -> usize {
@@ -15,11 +15,11 @@ pub fn get_main_workers_limit() -> usize {
 
 /// Returns the CPU usage as a percentage.
 fn get_cpu_usage() -> f32 {
-    let mut sys = System::new_all();
-    sys.refresh_all();
-    let cpus = sys.cpus();
-    let total_usage: f32 = cpus.iter().map(|cpu| cpu.cpu_usage()).sum();
-    total_usage / cpus.len() as f32
+    let mut s =
+        System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
+    std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+    s.refresh_cpu_usage();
+    s.global_cpu_usage()
 }
 
 /// Returns the maximum number of sub workers based on the number of CPU cores and boost percentage.
