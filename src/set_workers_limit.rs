@@ -91,6 +91,6 @@ mod tests {
         assert!(sub_worker_limit_p0 <= sub_worker_limit_p60);
 
         //boost_percentageが60.0の場合よりも60.1の場合はsub_workers_limitが小さいことを確認する。
-        assert!(sub_worker_limit_p60 >= sub_worker_limit_pm0p1);
+        assert!(sub_worker_limit_p60 >= sub_worker_limit_p60p1);
     }
 }
