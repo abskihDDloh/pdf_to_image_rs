@@ -5,3 +5,7 @@ pdfから画像ファイルを取り出すコマンドのrust版。
 ```
 cargo build --release
 ```
+実行例
+```
+pdf_to_image_rs --pdfdir `pwd`
+```
