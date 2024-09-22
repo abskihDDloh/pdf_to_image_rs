@@ -24,14 +24,14 @@ use threadpool::ThreadPool;
 
 ///PDFファイルから画像を取得する。
 /// # Arguments
-/// * `pdf_file_path` - PDFファイルのパス
+/// * `pdf_file_path` - PDFファイルのパス。
 /// # Returns
-/// * 1:ページ取得失敗もしくはページ内画像取得失敗
-/// * 成功時は0を返す。
-/// * 失敗時はエラーコードを返す。
-/// * 20:PDFファイルのフルパス取得失敗
-/// * 21:ディレクトリ作成失敗
-/// * 22:PDFファイルオープン失敗
+/// * 成功時:0
+/// * 失敗時:以下のエラーコード。
+/// * 1:ページ取得失敗もしくはページ内画像取得失敗。
+/// * 20:PDFファイルのフルパス取得失敗。
+/// * 21:ディレクトリ作成失敗。
+/// * 22:PDFファイルオープン失敗。
 ///
 pub fn get_images(pdf_file_path: &Path) -> u32 {
     let mut return_value: u32 = 0;
@@ -114,14 +114,14 @@ pub fn get_images(pdf_file_path: &Path) -> u32 {
             }
         };
 
-        // 以下のように参照を作成してクロージャに渡す
+        // 以下のように参照を作成してクロージャに渡す。
         let file_ref = Arc::clone(&file);
         let image_hash_list_ref = Arc::clone(&image_hash_list);
         let dest_dir_path_ref = Arc::clone(&dest_dir_path);
         let pdf_parh_string: String = pdf_path.display().to_string();
 
         //get_images_from_page()を使ってスレッドを生成して画像を取得する。
-        // スレッドプールにタスクを追加
+        // スレッドプールにタスクを追加。
         pool.execute(move || {
             match get_images_from_page(
                 &page,
@@ -155,7 +155,7 @@ pub fn get_images(pdf_file_path: &Path) -> u32 {
             }
         });
     }
-    // 全てのタスクが終了するのを待つ
+    // 全てのタスクが終了するのを待つ。
     pool.join();
     let end_time: i64 = Utc::now().timestamp_micros();
     let elapsed_time: i64 = end_time - start_time;
@@ -169,17 +169,17 @@ pub fn get_images(pdf_file_path: &Path) -> u32 {
 
 ///PDFファイルのページから画像を取得する。
 /// # Arguments
-/// * `page` - PDFファイルのページ
-/// * `file` - PDFファイル
-/// * `images_kvs` - 画像データのハッシュセット(スレッド感で共有するためArc<RwLock<HashSet<Arc<[u8]>>>>)
-/// * `dest_dir_path` - 画像ファイルの保存先ディレクトリ
-/// * `parent_thread_id` - 親スレッドのID(保存する画像のファイル名に使用するため)
-/// * `unixtime_val` - 現在時刻のUNIXTIME(保存する画像のファイル名に使用するため)
-/// * `page_count` - PDFのページ番号(保存する画像のファイル名に使用するため)
+/// * `page` - PDFファイルのページ。
+/// * `file` - PDFファイル。
+/// * `images_kvs` - 画像データのハッシュセット。(スレッド感で共有するためArc<RwLock<HashSet<Arc<[u8]>>>>)
+/// * `dest_dir_path` - 画像ファイルの保存先ディレクトリ。
+/// * `parent_thread_id` - 親スレッドのID(保存する画像のファイル名に使用するため)。
+/// * `unixtime_val` - 現在時刻のUNIXTIME(保存する画像のファイル名に使用するため)。
+/// * `page_count` - PDFのページ番号(保存する画像のファイル名に使用するため)。
 /// # Returns
-/// * 成功時は0を返す。
-/// * 失敗時はエラーコードを返す。
-/// * (0以外のエラーコードには、少なくとも一部の画像取得に失敗した以外の意味はない。失敗の詳細は出力されるロクに出力される。)
+/// * 全ページの処理成功時:0
+/// * 上記以外:0より大きい数字。
+/// * (0以外の値には、少なくとも一部の画像取得に失敗した以外の意味はない。失敗の詳細はログに出力される。)
 fn get_images_from_page<T, K, Y, L>(
     page: &PageRc,
     file: Arc<PdfFile<T, K, Y, L>>,
