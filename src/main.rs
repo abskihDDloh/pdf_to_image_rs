@@ -1,6 +1,7 @@
-mod check_path;
-mod seek_pdf;
-use crate::seek_pdf::seek_pdf_file;
+extern crate file_method;
+
+use file_method::seek_file::seek_file_by_extension;
+
 mod get_image_from_pdf;
 mod get_thread_id;
 mod set_workers_limit;
@@ -32,7 +33,7 @@ struct Args {
 fn start(directory_path: &Path) -> u32 {
     let mut return_value: u32 = 0;
 
-    let _pdf_files: Vec<std::path::PathBuf> = match seek_pdf_file(directory_path) {
+    let _pdf_files: Vec<std::path::PathBuf> = match seek_file_by_extension(directory_path, "pdf") {
         Ok(files) => files,
         Err(e) => {
             error!("ERROR OCCURED WHILE SEEKING PDF FILES. ERR: {}", e);
